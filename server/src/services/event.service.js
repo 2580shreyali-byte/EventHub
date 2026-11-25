@@ -1,5 +1,11 @@
 import { pool } from '../config/db.js';
 
+function formatSqlDate(isoStr) {
+  const d = new Date(isoStr);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
 export class EventService {
   /**
    * Lists events with filtering, search and pagination.
@@ -139,9 +145,6 @@ export class EventService {
       bannerUrl = null
     } = eventData;
 
-    // Convert ISO strings to MySQL DATETIME format YYYY-MM-DD HH:MM:SS
-    const formatSqlDate = (isoStr) => new Date(isoStr).toISOString().slice(0, 19).replace('T', ' ');
-
     const [result] = await pool.query(
       `INSERT INTO events (
         title, description, category, venue,
@@ -189,8 +192,6 @@ export class EventService {
       error.code = 'INVALID_CAPACITY';
       throw error;
     }
-
-    const formatSqlDate = (isoStr) => new Date(isoStr).toISOString().slice(0, 19).replace('T', ' ');
 
     const fieldMap = {
       title: 'title',
@@ -281,6 +282,115 @@ export class EventService {
     return {
       action: 'deleted',
       message: 'Event deleted successfully.'
+    };
+  }
+
+  /**
+   * Adds a new gate to an event (Admin only).
+   */
+  async addGate(eventId, { gateName, locationDescription = null }) {
+    const event = await this.getEventById(eventId, { isAdmin: true });
+    if (!event) {
+      const error = new Error('Event not found.');
+      error.statusCode = 404;
+      error.code = 'EVENT_NOT_FOUND';
+      throw error;
+    }
+
+    const [result] = await pool.query(
+      `INSERT INTO gates (event_id, gate_name, location_description, is_active)
+       VALUES (?, ?, ?, TRUE)`,
+      [eventId, gateName, locationDescription]
+    );
+
+    return {
+      id: result.insertId,
+      eventId: Number(eventId),
+      gateName,
+      locationDescription,
+      isActive: true
+    };
+  }
+
+  /**
+   * Lists all gates for an event.
+   */
+  async listGates(eventId) {
+    const event = await this.getEventById(eventId, { isAdmin: true });
+    if (!event) {
+      const error = new Error('Event not found.');
+      error.statusCode = 404;
+      error.code = 'EVENT_NOT_FOUND';
+      throw error;
+    }
+
+    const [rows] = await pool.query(
+      `SELECT id, gate_name AS gateName, location_description AS locationDescription, is_active AS isActive
+       FROM gates 
+       WHERE event_id = ?
+       ORDER BY id ASC`,
+      [eventId]
+    );
+
+    return rows.map(r => ({
+      ...r,
+      isActive: Boolean(r.isActive)
+    }));
+  }
+
+  /**
+   * Updates an existing gate (Admin only).
+   */
+  async updateGate(eventId, gateId, { gateName, locationDescription, isActive }) {
+    const [gateRows] = await pool.query(
+      `SELECT id, event_id, gate_name, location_description, is_active 
+       FROM gates 
+       WHERE id = ? AND event_id = ?`,
+      [gateId, eventId]
+    );
+
+    if (gateRows.length === 0) {
+      const error = new Error('Gate not found for this event.');
+      error.statusCode = 404;
+      error.code = 'GATE_NOT_FOUND';
+      throw error;
+    }
+
+    const updates = [];
+    const values = [];
+
+    if (gateName !== undefined) {
+      updates.push('gate_name = ?');
+      values.push(gateName);
+    }
+    if (locationDescription !== undefined) {
+      updates.push('location_description = ?');
+      values.push(locationDescription);
+    }
+    if (isActive !== undefined) {
+      updates.push('is_active = ?');
+      values.push(isActive ? 1 : 0);
+    }
+
+    if (updates.length > 0) {
+      values.push(gateId);
+      await pool.query(
+        `UPDATE gates SET ${updates.join(', ')} WHERE id = ?`,
+        values
+      );
+    }
+
+    const [updatedRows] = await pool.query(
+      `SELECT id, gate_name AS gateName, location_description AS locationDescription, is_active AS isActive
+       FROM gates WHERE id = ?`,
+      [gateId]
+    );
+
+    return {
+      id: updatedRows[0].id,
+      gateName: updatedRows[0].gateName,
+      locationDescription: updatedRows[0].locationDescription,
+      isActive: Boolean(updatedRows[0].isActive)
     };
   }
 }

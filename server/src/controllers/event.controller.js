@@ -62,6 +62,33 @@ export class EventController {
       next(err);
     }
   }
+
+  async addGate(req, res, next) {
+    try {
+      const gate = await eventService.addGate(req.params.id, req.body);
+      return successResponse(res, gate, 'Gate added successfully', 201);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async listGates(req, res, next) {
+    try {
+      const gates = await eventService.listGates(req.params.id);
+      return successResponse(res, gates, 'Gates retrieved successfully');
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async updateGate(req, res, next) {
+    try {
+      const gate = await eventService.updateGate(req.params.id, req.params.gateId, req.body);
+      return successResponse(res, gate, 'Gate updated successfully');
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 export const eventController = new EventController();

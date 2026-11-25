@@ -3,6 +3,7 @@ import healthRoutes from './health.routes.js';
 import authRoutes from './auth.routes.js';
 import eventRoutes from './event.routes.js';
 import passRoutes from './pass.routes.js';
+import checkinRoutes from './checkin.routes.js';
 
 const router = Router();
 
@@ -17,5 +18,8 @@ router.use('/events', eventRoutes);
 
 // Mount Pass endpoints at /api/v1/passes
 router.use('/passes', passRoutes);
+
+// Mount Checkin endpoints at /api/v1/checkin
+router.use('/checkin', checkinRoutes);
 
 export default router;
