@@ -9,6 +9,8 @@ import {
   Users, 
   Filter, 
   ArrowRight,
+  ChevronLeft,
+  ChevronRight,
   AlertCircle
 } from 'lucide-react';
 import { StatusPill } from '../../components/common/StatusPill.jsx';
@@ -18,14 +20,18 @@ export function ExploreEventsPage() {
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ page: 1, limit: 9, total: 0, totalPages: 1 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const fetchEvents = async () => {
+  const fetchEvents = async (pageToFetch = page) => {
     try {
       setLoading(true);
       setError('');
       const params = new URLSearchParams();
+      params.append('page', String(pageToFetch));
+      params.append('limit', '9');
       if (selectedCategory) params.append('category', selectedCategory);
       if (searchQuery) params.append('search', searchQuery);
 
@@ -33,6 +39,9 @@ export function ExploreEventsPage() {
       if (res.data?.success) {
         const evts = res.data.data.events || [];
         setEvents(evts);
+        if (res.data.data.pagination) {
+          setPagination(res.data.data.pagination);
+        }
 
         // Dynamically collect unique categories
         const cats = [...new Set(evts.map(e => e.category))].filter(Boolean);
@@ -46,12 +55,22 @@ export function ExploreEventsPage() {
   };
 
   useEffect(() => {
-    fetchEvents();
+    setPage(1);
+    fetchEvents(1);
   }, [selectedCategory]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    fetchEvents();
+    setPage(1);
+    fetchEvents(1);
+  };
+
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= pagination.totalPages) {
+      setPage(newPage);
+      fetchEvents(newPage);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   return (
@@ -71,7 +90,7 @@ export function ExploreEventsPage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search events, venues, topics..."
+            placeholder="Search events, topics, categories, venues..."
             className="w-full pl-10 pr-4 py-2 border border-[#EAE6F0] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#6D28D9] focus:border-transparent"
           />
         </form>
@@ -137,54 +156,83 @@ export function ExploreEventsPage() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {events.map((evt) => (
-            <div 
-              key={evt.id} 
-              className="bg-white rounded-2xl border border-[#EAE6F0] hover:border-purple-300 p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
-            >
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-bold uppercase tracking-wider text-[#6D28D9] bg-[#F1EBFF] px-2.5 py-0.5 rounded-full">
-                    {evt.category}
-                  </span>
-                  <StatusPill status={evt.status} />
+        <div className="space-y-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {events.map((evt) => (
+              <div
+                key={evt.id}
+                className="bg-white rounded-2xl border border-[#EAE6F0] hover:border-purple-300 p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-bold uppercase tracking-wider text-[#6D28D9] bg-[#F1EBFF] px-2.5 py-0.5 rounded-full">
+                      {evt.category}
+                    </span>
+                    <StatusPill status={evt.status} />
+                  </div>
+
+                  <h3 className="text-lg font-bold text-[#24212B] line-clamp-1">{evt.title}</h3>
+                  <p className="text-xs text-[#777180] mt-2 line-clamp-3 leading-relaxed">{evt.description}</p>
+
+                  <div className="mt-5 pt-4 border-t border-[#EAE6F0] space-y-2 text-xs text-[#777180]">
+                    <div className="flex items-center space-x-2">
+                      <Clock className="w-3.5 h-3.5 text-[#6D28D9]" />
+                      <span>{new Date(evt.startTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <MapPin className="w-3.5 h-3.5 text-[#6D28D9]" />
+                      <span className="line-clamp-1">{evt.venue}</span>
+                    </div>
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="flex items-center space-x-1.5">
+                        <Users className="w-3.5 h-3.5 text-[#6D28D9]" />
+                        <span>{evt.currentRegistrations || 0} / {evt.maxCapacity} Seats</span>
+                      </span>
+                      <span className="font-semibold text-emerald-600">
+                        {evt.availableSeats !== undefined ? `${evt.availableSeats} open` : `${Math.max(0, evt.maxCapacity - (evt.currentRegistrations || 0))} open`}
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
-                <h3 className="text-lg font-bold text-[#24212B] line-clamp-1">{evt.title}</h3>
-                <p className="text-xs text-[#777180] mt-2 line-clamp-3 leading-relaxed">{evt.description}</p>
-
-                <div className="mt-5 pt-4 border-t border-[#EAE6F0] space-y-2 text-xs text-[#777180]">
-                  <div className="flex items-center space-x-2">
-                    <Clock className="w-3.5 h-3.5 text-[#6D28D9]" />
-                    <span>{new Date(evt.startTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <MapPin className="w-3.5 h-3.5 text-[#6D28D9]" />
-                    <span className="line-clamp-1">{evt.venue}</span>
-                  </div>
-                  <div className="flex items-center justify-between pt-1">
-                    <span className="flex items-center space-x-1.5">
-                      <Users className="w-3.5 h-3.5 text-[#6D28D9]" />
-                      <span>{evt.currentRegistrations || 0} / {evt.maxCapacity} Seats</span>
-                    </span>
-                    <span className="font-semibold text-emerald-600">
-                      {(evt.maxCapacity - (evt.currentRegistrations || 0))} open
-                    </span>
-                  </div>
+                <div className="mt-6 pt-3">
+                  <Link
+                    to={`/events/${evt.id}`}
+                    className="w-full block text-center py-2.5 px-4 rounded-xl font-bold text-xs bg-[#F1EBFF] text-[#6D28D9] hover:bg-[#6D28D9] hover:text-white transition-colors"
+                  >
+                    View Details & Register
+                  </Link>
                 </div>
               </div>
+            ))}
+          </div>
 
-              <div className="mt-6 pt-3">
-                <Link
-                  to={`/events/${evt.id}`}
-                  className="w-full block text-center py-2.5 px-4 rounded-xl font-bold text-xs bg-[#F1EBFF] text-[#6D28D9] hover:bg-[#6D28D9] hover:text-white transition-colors"
+          {/* Pagination Controls */}
+          {pagination.totalPages > 1 && (
+            <div className="bg-white p-4 rounded-2xl border border-[#EAE6F0] shadow-sm flex items-center justify-between">
+              <span className="text-xs text-[#777180]">
+                Page <span className="font-bold text-[#24212B]">{pagination.page}</span> of{' '}
+                <span className="font-bold text-[#24212B]">{pagination.totalPages}</span> ({pagination.total} events)
+              </span>
+
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => handlePageChange(pagination.page - 1)}
+                  disabled={pagination.page <= 1}
+                  className="p-2 rounded-xl border border-[#EAE6F0] text-[#777180] hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
-                  View Details & Register
-                </Link>
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => handlePageChange(pagination.page + 1)}
+                  disabled={pagination.page >= pagination.totalPages}
+                  className="p-2 rounded-xl border border-[#EAE6F0] text-[#777180] hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
               </div>
             </div>
-          ))}
+          )}
         </div>
       )}
     </div>

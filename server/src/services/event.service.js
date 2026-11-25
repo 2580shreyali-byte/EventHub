@@ -33,9 +33,9 @@ export class EventService {
     }
 
     if (search) {
-      conditions.push('(e.title LIKE ? OR e.description LIKE ? OR e.venue LIKE ?)');
+      conditions.push('(e.title LIKE ? OR e.description LIKE ? OR e.venue LIKE ? OR e.category LIKE ?)');
       const searchPattern = `%${search}%`;
-      params.push(searchPattern, searchPattern, searchPattern);
+      params.push(searchPattern, searchPattern, searchPattern, searchPattern);
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -54,7 +54,7 @@ export class EventService {
         e.start_time AS startTime, e.end_time AS endTime,
         e.registration_deadline AS registrationDeadline,
         e.max_capacity AS maxCapacity, e.current_registrations AS currentRegistrations,
-        (e.max_capacity - e.current_registrations) AS availableSeats,
+        GREATEST(0, CAST(e.max_capacity AS SIGNED) - CAST(e.current_registrations AS SIGNED)) AS availableSeats,
         e.registration_type AS registrationType,
         e.min_team_size AS minTeamSize, e.max_team_size AS maxTeamSize,
         e.status, e.banner_url AS bannerUrl,
@@ -90,7 +90,7 @@ export class EventService {
         e.start_time AS startTime, e.end_time AS endTime,
         e.registration_deadline AS registrationDeadline,
         e.max_capacity AS maxCapacity, e.current_registrations AS currentRegistrations,
-        (e.max_capacity - e.current_registrations) AS availableSeats,
+        GREATEST(0, CAST(e.max_capacity AS SIGNED) - CAST(e.current_registrations AS SIGNED)) AS availableSeats,
         e.registration_type AS registrationType,
         e.min_team_size AS minTeamSize, e.max_team_size AS maxTeamSize,
         e.status, e.banner_url AS bannerUrl,
@@ -186,11 +186,34 @@ export class EventService {
       throw error;
     }
 
+    // Status transition rules
+    if (existing.status === 'cancelled' && updateData.status && updateData.status !== 'cancelled') {
+      const error = new Error('Cancelled events cannot be reactivated or updated to another status.');
+      error.statusCode = 400;
+      error.code = 'INVALID_STATUS_TRANSITION';
+      throw error;
+    }
+
+    if (existing.status === 'completed' && updateData.status && ['draft', 'published'].includes(updateData.status)) {
+      const error = new Error('Completed events cannot transition back to draft or published.');
+      error.statusCode = 400;
+      error.code = 'INVALID_STATUS_TRANSITION';
+      throw error;
+    }
+
     if (updateData.maxCapacity !== undefined && updateData.maxCapacity < existing.currentRegistrations) {
       const error = new Error(`Cannot decrease max capacity below current confirmed registrations (${existing.currentRegistrations}).`);
       error.statusCode = 400;
       error.code = 'INVALID_CAPACITY';
       throw error;
+    }
+
+    // If transitioning to cancelled, safely revoke active passes
+    if (updateData.status === 'cancelled' && existing.status !== 'cancelled') {
+      await pool.query(
+        "UPDATE passes SET status = 'revoked' WHERE event_id = ? AND status = 'active'",
+        [eventId]
+      );
     }
 
     const fieldMap = {
@@ -297,16 +320,29 @@ export class EventService {
       throw error;
     }
 
+    // Check for duplicate gate name within the same event
+    const [existingGate] = await pool.query(
+      'SELECT id FROM gates WHERE event_id = ? AND LOWER(gate_name) = LOWER(?)',
+      [eventId, gateName.trim()]
+    );
+
+    if (existingGate.length > 0) {
+      const error = new Error(`A gate with the name "${gateName}" already exists for this event.`);
+      error.statusCode = 409;
+      error.code = 'DUPLICATE_GATE_NAME';
+      throw error;
+    }
+
     const [result] = await pool.query(
       `INSERT INTO gates (event_id, gate_name, location_description, is_active)
        VALUES (?, ?, ?, TRUE)`,
-      [eventId, gateName, locationDescription]
+      [eventId, gateName.trim(), locationDescription]
     );
 
     return {
       id: result.insertId,
       eventId: Number(eventId),
-      gateName,
+      gateName: gateName.trim(),
       locationDescription,
       isActive: true
     };
@@ -342,18 +378,44 @@ export class EventService {
    * Updates an existing gate (Admin only).
    */
   async updateGate(eventId, gateId, { gateName, locationDescription, isActive }) {
+    // 1. Verify gate exists
     const [gateRows] = await pool.query(
       `SELECT id, event_id, gate_name, location_description, is_active 
        FROM gates 
-       WHERE id = ? AND event_id = ?`,
-      [gateId, eventId]
+       WHERE id = ?`,
+      [gateId]
     );
 
     if (gateRows.length === 0) {
-      const error = new Error('Gate not found for this event.');
+      const error = new Error('Gate not found.');
       error.statusCode = 404;
       error.code = 'GATE_NOT_FOUND';
       throw error;
+    }
+
+    const gate = gateRows[0];
+
+    // 2. Reject updates if gate belongs to another event
+    if (Number(gate.event_id) !== Number(eventId)) {
+      const error = new Error(`Gate ${gateId} belongs to another event.`);
+      error.statusCode = 400;
+      error.code = 'GATE_MISMATCH';
+      throw error;
+    }
+
+    // 3. Prevent duplicate gate names within same event
+    if (gateName && gateName.trim().toLowerCase() !== gate.gate_name.toLowerCase()) {
+      const [duplicateCheck] = await pool.query(
+        'SELECT id FROM gates WHERE event_id = ? AND LOWER(gate_name) = LOWER(?) AND id != ?',
+        [eventId, gateName.trim(), gateId]
+      );
+
+      if (duplicateCheck.length > 0) {
+        const error = new Error(`A gate with the name "${gateName}" already exists for this event.`);
+        error.statusCode = 409;
+        error.code = 'DUPLICATE_GATE_NAME';
+        throw error;
+      }
     }
 
     const updates = [];
@@ -361,7 +423,7 @@ export class EventService {
 
     if (gateName !== undefined) {
       updates.push('gate_name = ?');
-      values.push(gateName);
+      values.push(gateName.trim());
     }
     if (locationDescription !== undefined) {
       updates.push('location_description = ?');

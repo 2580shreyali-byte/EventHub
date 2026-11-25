@@ -13,7 +13,9 @@ import {
   Trash2, 
   CheckCircle,
   AlertCircle,
-  DoorOpen
+  DoorOpen,
+  AlertTriangle,
+  X
 } from 'lucide-react';
 import { StatusPill } from '../../components/common/StatusPill.jsx';
 
@@ -22,6 +24,15 @@ export function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+
+  // Cancel Confirmation Modal State
+  const [cancelModalEvent, setCancelModalEvent] = useState(null);
+  const [cancelling, setCancelling] = useState(false);
+
+  // Gates Drawer / Modal State
+  const [gateModalEvent, setGateModalEvent] = useState(null);
+  const [eventGates, setEventGates] = useState([]);
+  const [loadingGates, setLoadingGates] = useState(false);
 
   const fetchEvents = async () => {
     try {
@@ -43,19 +54,36 @@ export function AdminDashboardPage() {
     fetchEvents();
   }, []);
 
-  const handleCancelOrDelete = async (eventId, title) => {
-    if (!window.confirm(`Are you sure you want to cancel or delete "${title}"?`)) {
-      return;
+  const handleOpenGatesModal = async (evt) => {
+    setGateModalEvent(evt);
+    setLoadingGates(true);
+    try {
+      const res = await api.get(`/events/${evt.id}/gates`);
+      if (res.data?.success) {
+        setEventGates(res.data.data || []);
+      }
+    } catch {
+      setEventGates([]);
+    } finally {
+      setLoadingGates(false);
     }
+  };
+
+  const confirmCancelOrDelete = async () => {
+    if (!cancelModalEvent) return;
+    setCancelling(true);
 
     try {
-      const res = await api.delete(`/events/${eventId}`);
+      const res = await api.delete(`/events/${cancelModalEvent.id}`);
       if (res.data?.success) {
-        setMessage(res.data.message || 'Event processed successfully.');
+        setMessage(res.data.message || 'Event status updated successfully.');
+        setCancelModalEvent(null);
         fetchEvents();
       }
     } catch (err) {
       setError(err.message || 'Failed to cancel or delete event.');
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -130,7 +158,7 @@ export function AdminDashboardPage() {
       <div className="bg-white rounded-3xl border border-[#EAE6F0] shadow-sm overflow-hidden">
         <div className="p-6 border-b border-[#EAE6F0] flex items-center justify-between">
           <h2 className="text-base font-extrabold text-[#24212B]">All Events</h2>
-          <span className="text-xs text-[#777180]">{events.length} active records</span>
+          <span className="text-xs text-[#777180]">{events.length} records</span>
         </div>
 
         {loading ? (
@@ -187,6 +215,13 @@ export function AdminDashboardPage() {
                       <StatusPill status={evt.status} />
                     </td>
                     <td className="py-4 px-6 text-right whitespace-nowrap space-x-2">
+                      <button
+                        onClick={() => handleOpenGatesModal(evt)}
+                        className="p-1.5 rounded-lg text-[#777180] hover:text-[#6D28D9] hover:bg-[#F1EBFF] inline-flex items-center"
+                        title="View Gates"
+                      >
+                        <DoorOpen className="w-4 h-4" />
+                      </button>
                       <Link
                         to={`/admin/events/${evt.id}/edit`}
                         className="p-1.5 rounded-lg text-[#777180] hover:text-[#6D28D9] hover:bg-[#F1EBFF] inline-flex items-center"
@@ -195,7 +230,7 @@ export function AdminDashboardPage() {
                         <Edit3 className="w-4 h-4" />
                       </Link>
                       <button
-                        onClick={() => handleCancelOrDelete(evt.id, evt.title)}
+                        onClick={() => setCancelModalEvent(evt)}
                         className="p-1.5 rounded-lg text-[#777180] hover:text-[#DC4040] hover:bg-rose-50 inline-flex items-center"
                         title="Cancel / Delete Event"
                       >
@@ -209,6 +244,100 @@ export function AdminDashboardPage() {
           </div>
         )}
       </div>
+
+      {/* Safe Cancellation Confirmation Modal */}
+      {cancelModalEvent && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-xl border border-[#EAE6F0] space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-[#DC4040] flex items-center justify-center">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+
+            <div>
+              <h3 className="text-lg font-extrabold text-[#24212B]">
+                Cancel Event "{cancelModalEvent.title}"?
+              </h3>
+              <p className="text-xs text-[#777180] mt-1 leading-relaxed">
+                {cancelModalEvent.currentRegistrations > 0
+                  ? `This event currently has ${cancelModalEvent.currentRegistrations} registered attendees. Safe cancellation will preserve all registration history and attendance records, prevent new registrations, and revoke active passes.`
+                  : "This event has zero registrations and will be safely deleted from the campus catalog."}
+              </p>
+            </div>
+
+            <div className="flex items-center space-x-3 pt-3">
+              <button
+                type="button"
+                onClick={() => setCancelModalEvent(null)}
+                className="flex-1 py-2.5 px-4 rounded-xl border border-[#EAE6F0] text-xs font-bold text-[#777180] hover:bg-slate-50 transition-colors"
+              >
+                Keep Event
+              </button>
+              <button
+                type="button"
+                disabled={cancelling}
+                onClick={confirmCancelOrDelete}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-[#DC4040] hover:bg-rose-700 text-white text-xs font-bold transition-colors disabled:opacity-50"
+              >
+                {cancelling ? 'Processing...' : 'Confirm Cancellation'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Gates View Modal */}
+      {gateModalEvent && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-xl border border-[#EAE6F0] space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <DoorOpen className="w-5 h-5 text-[#6D28D9]" />
+                <h3 className="text-base font-extrabold text-[#24212B]">
+                  Authorized Gates for Event
+                </h3>
+              </div>
+              <button onClick={() => setGateModalEvent(null)} className="p-1 rounded-lg hover:bg-slate-100 text-[#777180]">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-[#777180]">{gateModalEvent.title}</p>
+
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {loadingGates ? (
+                <div className="text-xs text-[#777180] text-center py-4">Loading gates...</div>
+              ) : eventGates.length === 0 ? (
+                <div className="text-xs text-[#777180] text-center py-4 bg-slate-50 rounded-xl">
+                  No gates configured yet for this event.
+                </div>
+              ) : (
+                eventGates.map((g) => (
+                  <div key={g.id} className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs">
+                    <div>
+                      <span className="font-bold text-[#24212B]">{g.gateName}</span>
+                      {g.locationDescription && (
+                        <p className="text-[11px] text-[#777180]">{g.locationDescription}</p>
+                      )}
+                    </div>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${g.isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'}`}>
+                      {g.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="pt-2">
+              <Link
+                to={`/admin/events/${gateModalEvent.id}/edit`}
+                className="w-full block text-center py-2 px-4 rounded-xl bg-[#F1EBFF] text-[#6D28D9] font-bold text-xs hover:bg-[#6D28D9] hover:text-white transition-colors"
+              >
+                Manage & Add Gates in Event Settings
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
