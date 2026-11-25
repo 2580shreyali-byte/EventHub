@@ -2,6 +2,7 @@ import { Router } from 'express';
 import healthRoutes from './health.routes.js';
 import authRoutes from './auth.routes.js';
 import eventRoutes from './event.routes.js';
+import passRoutes from './pass.routes.js';
 
 const router = Router();
 
@@ -13,5 +14,8 @@ router.use('/auth', authRoutes);
 
 // Mount Event endpoints at /api/v1/events
 router.use('/events', eventRoutes);
+
+// Mount Pass endpoints at /api/v1/passes
+router.use('/passes', passRoutes);
 
 export default router;
