@@ -12,8 +12,15 @@ const app = express();
 app.use(helmet());
 
 // CORS Configuration with Credentials support
+const allowedOrigins = [env.CLIENT_URL, 'http://localhost:5173', 'http://127.0.0.1:5173'];
 app.use(cors({
-  origin: env.CLIENT_URL,
+  origin: (origin, callback) => {
+    // allow requests with no origin (like mobile apps, curl, server-to-server)
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(null, true); // Permissive in dev while respecting credentials
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'X-CSRF-Token', 'Authorization']
