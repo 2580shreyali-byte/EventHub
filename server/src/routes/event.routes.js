@@ -6,6 +6,7 @@ import { authenticate, requireRole, optionalAuth } from '../middleware/auth.midd
 import { validateBody, validateQuery } from '../middleware/validate.middleware.js';
 import { createEventSchema, updateEventSchema, eventQuerySchema } from '../validators/event.validator.js';
 import { createGateSchema, updateGateSchema } from '../validators/checkin.validator.js';
+import { registerSchema } from '../validators/registration.validator.js';
 
 const router = Router();
 
@@ -38,6 +39,7 @@ router.post(
   '/:id/register',
   authenticate,
   requireRole('student'),
+  validateBody(registerSchema),
   (req, res, next) => registrationController.register(req, res, next)
 );
 

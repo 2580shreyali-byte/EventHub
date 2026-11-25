@@ -1,18 +1,19 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
-import { 
-  Compass, 
-  QrCode, 
-  Calendar, 
-  ShieldCheck, 
-  User, 
-  LogOut, 
-  Menu, 
-  X, 
-  PlusCircle, 
-  Activity, 
-  ScanLine 
+import {
+  Compass,
+  QrCode,
+  Calendar,
+  ShieldCheck,
+  User,
+  LogOut,
+  Menu,
+  X,
+  PlusCircle,
+  Activity,
+  ScanLine,
+  Mail
 } from 'lucide-react';
 
 export function Navbar() {
@@ -78,6 +79,17 @@ export function Navbar() {
                 >
                   <QrCode className="w-4 h-4 text-[#6D28D9]" />
                   <span>My Passes</span>
+                </Link>
+                <Link
+                  to="/invitations"
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center space-x-1.5 transition-colors ${
+                    isActive('/invitations')
+                      ? 'bg-[#F1EBFF] text-[#6D28D9]'
+                      : 'text-[#24212B] hover:text-[#6D28D9] hover:bg-slate-50'
+                  }`}
+                >
+                  <Mail className="w-4 h-4 text-[#6D28D9]" />
+                  <span>Invitations</span>
                 </Link>
               </>
             )}
@@ -211,6 +223,13 @@ export function Navbar() {
                 className="block px-3 py-2 rounded-lg text-base font-medium text-[#24212B] hover:bg-[#F1EBFF]"
               >
                 My Passes
+              </Link>
+              <Link
+                to="/invitations"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-3 py-2 rounded-lg text-base font-medium text-[#24212B] hover:bg-[#F1EBFF]"
+              >
+                Team Invitations
               </Link>
               <Link
                 to="/profile"

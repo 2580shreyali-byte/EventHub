@@ -2,16 +2,17 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { api } from '../../api/client.js';
-import { 
-  Calendar, 
-  QrCode, 
-  Award, 
-  ArrowRight, 
-  Clock, 
-  MapPin, 
+import {
+  Calendar,
+  QrCode,
+  Award,
+  ArrowRight,
+  Clock,
+  MapPin,
   Sparkles,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Mail
 } from 'lucide-react';
 import { StatusPill } from '../../components/common/StatusPill.jsx';
 
@@ -19,15 +20,17 @@ export function StudentDashboardPage() {
   const { user } = useAuth();
   const [passes, setPasses] = useState([]);
   const [recommendedEvents, setRecommendedEvents] = useState([]);
+  const [invitations, setInvitations] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadDashboardData() {
       try {
         setLoading(true);
-        const [passesRes, eventsRes] = await Promise.allSettled([
+        const [passesRes, eventsRes, invRes] = await Promise.allSettled([
           api.get('/passes/my-passes'),
-          api.get('/events?limit=4')
+          api.get('/events?limit=4'),
+          api.get('/invitations')
         ]);
 
         if (passesRes.status === 'fulfilled' && passesRes.value.data?.success) {
@@ -36,6 +39,10 @@ export function StudentDashboardPage() {
 
         if (eventsRes.status === 'fulfilled' && eventsRes.value.data?.success) {
           setRecommendedEvents(eventsRes.value.data.data.events || []);
+        }
+
+        if (invRes.status === 'fulfilled' && invRes.value.data?.success) {
+          setInvitations(invRes.value.data.data || []);
         }
       } catch {
         // Handled
@@ -82,6 +89,32 @@ export function StudentDashboardPage() {
           </Link>
         </div>
       </div>
+
+      {/* Pending Team Invitations Alert */}
+      {invitations.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 text-amber-900 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-start space-x-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700 flex-shrink-0 mt-0.5">
+              <Mail className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-sm text-amber-900">
+                You have {invitations.length} pending team event {invitations.length === 1 ? 'invitation' : 'invitations'}!
+              </h3>
+              <p className="text-xs text-amber-800 mt-0.5">
+                Teammates are waiting for your confirmation to claim reserved seats and generate your SmartPass.
+              </p>
+            </div>
+          </div>
+          <Link
+            to="/invitations"
+            className="w-full sm:w-auto px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center justify-center space-x-1.5 transition-colors whitespace-nowrap shadow-sm"
+          >
+            <span>Review Invitations</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+      )}
 
       {/* Quick Metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
@@ -149,8 +182,8 @@ export function StudentDashboardPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {passes.slice(0, 2).map((pass) => (
-              <div 
-                key={pass.passId} 
+              <div
+                key={pass.passId}
                 className="bg-white rounded-2xl border border-[#EAE6F0] p-5 shadow-sm flex flex-col justify-between"
               >
                 <div>
@@ -196,8 +229,8 @@ export function StudentDashboardPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {recommendedEvents.map((evt) => (
-            <div 
-              key={evt.id} 
+            <div
+              key={evt.id}
               className="bg-white rounded-2xl border border-[#EAE6F0] p-4 shadow-sm hover:border-purple-300 transition-all flex flex-col justify-between"
             >
               <div>

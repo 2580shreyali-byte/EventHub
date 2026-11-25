@@ -1,8 +1,8 @@
 -- EventHub Production Database Schema (MySQL 8.x / InnoDB)
 -- Compliant with Architecture v2.2 Specifications
 
-CREATE DATABASE IF NOT EXISTS `eventhub` 
-  DEFAULT CHARACTER SET utf8mb4 
+CREATE DATABASE IF NOT EXISTS `eventhub`
+  DEFAULT CHARACTER SET utf8mb4
   DEFAULT COLLATE utf8mb4_unicode_ci;
 
 USE `eventhub`;
@@ -82,7 +82,25 @@ CREATE TABLE IF NOT EXISTS `registrations` (
   INDEX `idx_registrations_event_leader` (`event_id`, `leader_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 5. PASSES TABLE (SmartPass)
+-- 5. TEAM_MEMBERS TABLE
+CREATE TABLE IF NOT EXISTS `team_members` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `registration_id` INT UNSIGNED NOT NULL,
+  `event_id` INT UNSIGNED NOT NULL,
+  `user_id` INT UNSIGNED NOT NULL,
+  `role` ENUM('leader', 'member') NOT NULL DEFAULT 'member',
+  `status` ENUM('invited', 'accepted', 'declined') NOT NULL DEFAULT 'invited',
+  `invited_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `responded_at` DATETIME DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_event_user_participation` (`event_id`, `user_id`),
+  CONSTRAINT `fk_tm_registration_id` FOREIGN KEY (`registration_id`) REFERENCES `registrations` (`id`) ON DELETE RESTRICT,
+  CONSTRAINT `fk_tm_event_id` FOREIGN KEY (`event_id`) REFERENCES `events` (`id`) ON DELETE RESTRICT,
+  CONSTRAINT `fk_tm_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT,
+  INDEX `idx_tm_user_status` (`user_id`, `status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 6. PASSES TABLE (SmartPass)
 CREATE TABLE IF NOT EXISTS `passes` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `registration_id` INT UNSIGNED NOT NULL,

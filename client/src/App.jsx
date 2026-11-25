@@ -13,6 +13,7 @@ import { ExploreEventsPage } from './pages/student/ExploreEventsPage.jsx';
 import { EventDetailsPage } from './pages/student/EventDetailsPage.jsx';
 import { StudentDashboardPage } from './pages/student/StudentDashboardPage.jsx';
 import { MyPassesPage } from './pages/student/MyPassesPage.jsx';
+import { InvitationsPage } from './pages/student/InvitationsPage.jsx';
 import { StudentProfilePage } from './pages/student/StudentProfilePage.jsx';
 
 // Admin Pages
@@ -38,71 +39,79 @@ export function App() {
               <Route path="/register" element={<RegisterPage />} />
 
               {/* Student Protected Routes */}
-              <Route 
-                path="/dashboard" 
+              <Route
+                path="/dashboard"
                 element={
                   <ProtectedRoute allowedRole="student">
                     <StudentDashboardPage />
                   </ProtectedRoute>
-                } 
+                }
               />
-              <Route 
-                path="/my-passes" 
+              <Route
+                path="/my-passes"
                 element={
                   <ProtectedRoute allowedRole="student">
                     <MyPassesPage />
                   </ProtectedRoute>
-                } 
+                }
               />
-              <Route 
-                path="/profile" 
+              <Route
+                path="/invitations"
+                element={
+                  <ProtectedRoute allowedRole="student">
+                    <InvitationsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/profile"
                 element={
                   <ProtectedRoute allowedRole="student">
                     <StudentProfilePage />
                   </ProtectedRoute>
-                } 
+                }
               />
 
               {/* Admin Protected Routes */}
-              <Route 
-                path="/admin" 
+              <Route
+                path="/admin"
                 element={
                   <ProtectedRoute allowedRole="admin">
                     <AdminDashboardPage />
                   </ProtectedRoute>
-                } 
+                }
               />
-              <Route 
-                path="/admin/events/new" 
+              <Route
+                path="/admin/events/new"
                 element={
                   <ProtectedRoute allowedRole="admin">
                     <CreateEventPage />
                   </ProtectedRoute>
-                } 
+                }
               />
-              <Route 
-                path="/admin/events/:id/edit" 
+              <Route
+                path="/admin/events/:id/edit"
                 element={
                   <ProtectedRoute allowedRole="admin">
                     <EditEventPage />
                   </ProtectedRoute>
-                } 
+                }
               />
-              <Route 
-                path="/admin/scanner" 
+              <Route
+                path="/admin/scanner"
                 element={
                   <ProtectedRoute allowedRole="admin">
                     <GateScannerPage />
                   </ProtectedRoute>
-                } 
+                }
               />
-              <Route 
-                path="/admin/queueless" 
+              <Route
+                path="/admin/queueless"
                 element={
                   <ProtectedRoute allowedRole="admin">
                     <QueueLessPage />
                   </ProtectedRoute>
-                } 
+                }
               />
 
               {/* Catch-all */}

@@ -5,14 +5,13 @@ export class RegistrationController {
   async register(req, res, next) {
     try {
       const eventId = parseInt(req.params.id, 10);
-      const result = await registrationService.registerForEvent(eventId, req.user);
+      const result = await registrationService.registerForEvent(eventId, req.user, req.body || {});
 
-      return successResponse(
-        res,
-        result,
-        'Registration confirmed. Your personal SmartPass has been issued.',
-        201
-      );
+      const message = result.status === 'pending_members'
+        ? 'Team registration initiated. Invitations dispatched to team members.'
+        : 'Registration confirmed. Your personal SmartPass has been issued.';
+
+      return successResponse(res, result, message, 201);
     } catch (err) {
       next(err);
     }

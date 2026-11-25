@@ -4,6 +4,7 @@ import authRoutes from './auth.routes.js';
 import eventRoutes from './event.routes.js';
 import passRoutes from './pass.routes.js';
 import checkinRoutes from './checkin.routes.js';
+import invitationRoutes from './invitation.routes.js';
 
 const router = Router();
 
@@ -21,5 +22,8 @@ router.use('/passes', passRoutes);
 
 // Mount Checkin endpoints at /api/v1/checkin
 router.use('/checkin', checkinRoutes);
+
+// Mount Invitation endpoints at /api/v1/invitations
+router.use('/invitations', invitationRoutes);
 
 export default router;
