@@ -226,6 +226,7 @@ flowchart TB
 
 ## 7. Main User Workflows
 
+
 ### Team Registration & Headcount Workflow
 
 The team registration and invitation acceptance flow follows this sequence:
@@ -233,47 +234,55 @@ The team registration and invitation acceptance flow follows this sequence:
 ```mermaid
 sequenceDiagram
     autonumber
+
     actor Leader as Team Leader
     actor Member as Invited Teammate
     participant Client as Frontend SPA
     participant API as Backend API
     participant DB as MySQL (InnoDB)
 
-    Leader->>Client: Enters Team Name and teammate emails
+    Leader->>Client: Enters Team Name and Teammate Emails
     Client->>API: POST /api/v1/events/:id/register
+
     rect rgb(245, 240, 255)
         Note over API,DB: Database Transaction
         API->>DB: START TRANSACTION
-        API->>DB: SELECT max_capacity, current_registrations FROM events WHERE id = ? FOR UPDATE
-        API->>API: Verify: current_registrations + headcount <= max_capacity
-        API->>DB: UPDATE events SET current_registrations = current_registrations + headcount
-        API->>DB: INSERT INTO registrations (status: 'pending_members', reserved_headcount)
-        API->>DB: INSERT INTO team_members (leader as 'accepted', members as 'invited')
+        API->>DB: SELECT event capacity FOR UPDATE
+        API->>API: Verify current_registrations + headcount <= max_capacity
+        API->>DB: Reserve seats by updating current_registrations
+        API->>DB: INSERT registration with pending_members status
+        API->>DB: INSERT team_members (leader accepted, teammates invited)
         API->>DB: COMMIT
     end
+
     API-->>Client: 201 Created (Team pending, seats reserved)
 
     Member->>Client: Navigates to /invitations
     Client->>API: GET /api/v1/invitations
     API-->>Client: Returns pending invitations
-    Member->>Client: Clicks "Accept"
+
+    Member->>Client: Clicks Accept
     Client->>API: POST /api/v1/invitations/:id/accept
+
     rect rgb(240, 250, 240)
-        Note over API,DB: Acceptance & Quorum Verification
+        Note over API,DB: Acceptance and Quorum Verification
         API->>DB: START TRANSACTION
-        API->>DB: UPDATE team_members SET status = 'accepted' WHERE id = ?
-        API->>DB: Query team_members: check if any remain 'invited'
+        API->>DB: UPDATE team_members SET status = accepted
+        API->>DB: Check whether any members remain invited
+
         alt All invited members accepted (Quorum Met)
-            API->>DB: UPDATE registrations SET status = 'confirmed'
-            API->>DB: Generate passes for all members (storing SHA-256 hash)
+            API->>DB: UPDATE registrations SET status = confirmed
+            API->>DB: Generate passes for all members
+            API->>DB: Store SHA-256 pass hashes
             API->>DB: COMMIT
-            API-->>Client: 200 OK (Registration confirmed; returns accepting member's pass)
-        else Pending other members
+            API-->>Client: 200 OK (Registration confirmed, returns accepting member's pass)
+        else Other members still pending
             API->>DB: COMMIT
             API-->>Client: 200 OK (Status remains pending_members)
         end
     end
 ```
+
 
 ### SmartPass Issuance & Gate Check-In Workflow
 
