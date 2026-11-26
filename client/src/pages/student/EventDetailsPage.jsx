@@ -17,7 +17,9 @@ import {
   Plus,
   Trash2,
   Mail,
-  UserPlus
+  UserPlus,
+  LogIn,
+  XCircle
 } from 'lucide-react';
 import { StatusPill } from '../../components/common/StatusPill.jsx';
 
@@ -33,51 +35,53 @@ export function EventDetailsPage() {
   const [teamRegistrationResult, setTeamRegistrationResult] = useState(null);
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState('');
+  const [actionMessage, setActionMessage] = useState('');
 
   // Team Registration Form State
   const [teamName, setTeamName] = useState('');
   const [memberEmails, setMemberEmails] = useState(['']);
 
-  useEffect(() => {
-    async function loadData() {
-      try {
-        setLoading(true);
-        setError('');
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      setError('');
 
-        const eventRes = await api.get(`/events/${id}`);
-        if (eventRes.data?.success) {
-          const evt = eventRes.data.data;
-          setEvent(evt);
-          setGates(evt.gates || []);
+      const eventRes = await api.get(`/events/${id}`);
+      if (eventRes.data?.success) {
+        const evt = eventRes.data.data;
+        setEvent(evt);
+        setGates(evt.gates || []);
 
-          // Initialize member email fields based on minTeamSize
-          const minMembersNeeded = Math.max(1, (evt.minTeamSize || 2) - 1);
-          setMemberEmails(Array.from({ length: minMembersNeeded }, () => ''));
-        }
-
-        // If authenticated student, check if already registered
-        if (isAuthenticated && isStudent) {
-          try {
-            const passesRes = await api.get('/passes/my-passes');
-            if (passesRes.data?.success) {
-              const myPasses = passesRes.data.data || [];
-              const match = myPasses.find(p => Number(p.eventId) === Number(id));
-              if (match) {
-                setExistingPass(match);
-              }
-            }
-          } catch {
-            // Ignore failure to fetch personal passes
-          }
-        }
-      } catch (err) {
-        setError(err.message || 'Failed to load event details.');
-      } finally {
-        setLoading(false);
+        // Initialize member email fields based on minTeamSize
+        const minMembersNeeded = Math.max(1, (evt.minTeamSize || 2) - 1);
+        setMemberEmails(Array.from({ length: minMembersNeeded }, () => ''));
       }
-    }
 
+      // If authenticated student, check if already registered for a pass
+      if (isAuthenticated && isStudent) {
+        try {
+          const passesRes = await api.get('/passes/my-passes');
+          if (passesRes.data?.success) {
+            const myPasses = passesRes.data.data || [];
+            const match = myPasses.find(p => Number(p.eventId) === Number(id));
+            if (match) {
+              setExistingPass(match);
+            }
+          }
+        } catch {
+          // Ignore failure to fetch personal passes
+        }
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to load event details.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     loadData();
   }, [id, isAuthenticated, isStudent]);
 
@@ -95,10 +99,7 @@ export function EventDetailsPage() {
       });
       if (res.data?.success) {
         setRegisteredNewPass(res.data.data.pass);
-        const refreshEvt = await api.get(`/events/${id}`);
-        if (refreshEvt.data?.success) {
-          setEvent(refreshEvt.data.data);
-        }
+        await loadData();
       }
     } catch (err) {
       setError(err.message || 'Registration failed.');
@@ -146,15 +147,48 @@ export function EventDetailsPage() {
 
       if (res.data?.success) {
         setTeamRegistrationResult(res.data.data);
-        const refreshEvt = await api.get(`/events/${id}`);
-        if (refreshEvt.data?.success) {
-          setEvent(refreshEvt.data.data);
-        }
+        await loadData();
       }
     } catch (err) {
       setError(err.message || 'Team registration failed.');
     } finally {
       setRegistering(false);
+    }
+  };
+
+  const handleAcceptDirect = async (invitationId) => {
+    try {
+      setActionLoading(true);
+      setError('');
+      const res = await api.post(`/invitations/${invitationId}/accept`);
+      if (res.data?.success) {
+        if (res.data.data?.myPass) {
+          setRegisteredNewPass(res.data.data.myPass);
+        }
+        setActionMessage(res.data.message || 'Invitation accepted!');
+        await loadData();
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to accept invitation.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDeclineDirect = async (invitationId) => {
+    if (!window.confirm('Are you sure you want to decline this invitation?')) return;
+    try {
+      setActionLoading(true);
+      setError('');
+      const res = await api.post(`/invitations/${invitationId}/decline`);
+      if (res.data?.success) {
+        setActionMessage('You have declined the team invitation.');
+        await loadData();
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to decline invitation.');
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -203,6 +237,10 @@ export function EventDetailsPage() {
   const isPastDeadline = new Date() > new Date(event.registrationDeadline);
   const isClosed = isFull || isPastDeadline || event.status !== 'published';
   const isTeamEvent = event.registrationType === 'team';
+  const userParticipation = event.userParticipation;
+  const isUserParticipating = !!userParticipation;
+  const isTeamPending = userParticipation?.registrationStatus === 'pending_members';
+  const isTeamConfirmed = userParticipation?.registrationStatus === 'confirmed';
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
@@ -221,15 +259,22 @@ export function EventDetailsPage() {
         </div>
       )}
 
-      {/* Registration Success Banner (Individual) */}
-      {registeredNewPass && (
+      {actionMessage && (
+        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center space-x-2 text-emerald-800 text-xs">
+          <CheckCircle2 className="w-4 h-4 text-[#16865B] flex-shrink-0" />
+          <span>{actionMessage}</span>
+        </div>
+      )}
+
+      {/* Registration Success Banner (Individual Pass) */}
+      {(registeredNewPass || existingPass) && (
         <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-6 text-emerald-900 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-start space-x-3">
             <CheckCircle2 className="w-6 h-6 text-[#16865B] flex-shrink-0 mt-0.5" />
             <div>
-              <h3 className="font-extrabold text-base text-[#16865B]">Registration Confirmed! SmartPass Issued.</h3>
+              <h3 className="font-extrabold text-base text-[#16865B]">Registration Confirmed! SmartPass Active.</h3>
               <p className="text-xs text-emerald-800 mt-1">
-                Your blind cryptographic QR code has been generated. Pass Code: <span className="font-mono font-bold">{registeredNewPass.passCode}</span>
+                Your individual cryptographic QR pass is ready. Pass Code: <span className="font-mono font-bold">{(registeredNewPass || existingPass).passCode}</span>
               </p>
             </div>
           </div>
@@ -242,33 +287,70 @@ export function EventDetailsPage() {
         </div>
       )}
 
-      {/* Team Registration Success Banner */}
-      {teamRegistrationResult && (
+      {/* Team Pending Status Banner / Roster */}
+      {isTeamPending && (
         <div className="bg-purple-50 border border-purple-200 rounded-2xl p-6 text-purple-900 shadow-sm space-y-4">
-          <div className="flex items-start space-x-3">
-            <CheckCircle2 className="w-6 h-6 text-[#6D28D9] flex-shrink-0 mt-0.5" />
-            <div>
-              <h3 className="font-extrabold text-base text-[#6D28D9]">
-                Team Registration Initiated — "{teamRegistrationResult.teamName}"
-              </h3>
-              <p className="text-xs text-purple-800 mt-1">
-                Status: <span className="font-bold uppercase tracking-wider bg-purple-200/70 px-2 py-0.5 rounded text-[10px]">Pending Member Invitations</span>. Headcount of <span className="font-bold">{teamRegistrationResult.reservedHeadcount}</span> seats reserved.
-              </p>
-              <p className="text-xs text-purple-700 mt-2">
-                Invitations have been sent to your team members. Once each member accepts from their dashboard, your team registration will transition to confirmed and individual SmartPasses will be issued.
-              </p>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-start space-x-3">
+              <Clock className="w-6 h-6 text-[#6D28D9] flex-shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-extrabold text-base text-[#6D28D9]">
+                  Team Registration: "{userParticipation.teamName}"
+                </h3>
+                <p className="text-xs text-purple-800 mt-0.5">
+                  Status: <span className="font-bold uppercase tracking-wider bg-purple-200 px-2 py-0.5 rounded text-[10px]">Awaiting Member Confirmations</span> · Reserved Headcount: <strong className="text-[#24212B]">{userParticipation.reservedHeadcount} seats</strong>
+                </p>
+                <p className="text-xs text-purple-700 mt-1">
+                  {userParticipation.isLeader
+                    ? 'You are the Team Leader. Passes will be issued to each member once everyone accepts.'
+                    : `You have been invited to participate on this team as a member.`}
+                </p>
+              </div>
             </div>
+
+            {/* If current user is an invited member who hasn't accepted yet */}
+            {!userParticipation.isLeader && userParticipation.memberStatus === 'invited' && (
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => handleDeclineDirect(userParticipation.invitationId)}
+                  disabled={actionLoading}
+                  className="px-4 py-2 rounded-xl border border-rose-200 bg-white hover:bg-rose-50 text-rose-700 font-bold text-xs transition-colors"
+                >
+                  Decline
+                </button>
+                <button
+                  onClick={() => handleAcceptDirect(userParticipation.invitationId)}
+                  disabled={actionLoading}
+                  className="px-4 py-2 rounded-xl bg-[#16865B] hover:bg-emerald-800 text-white font-bold text-xs shadow-sm transition-colors"
+                >
+                  {actionLoading ? 'Accepting...' : 'Accept Invitation'}
+                </button>
+              </div>
+            )}
           </div>
 
-          {teamRegistrationResult.invitations?.length > 0 && (
-            <div className="bg-white/80 rounded-xl p-4 border border-purple-100">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-purple-800 block mb-2">Dispatched Invitations</span>
-              <div className="space-y-1.5">
-                {teamRegistrationResult.invitations.map((inv, idx) => (
-                  <div key={idx} className="flex items-center justify-between text-xs py-1 px-2 rounded bg-purple-50/50">
-                    <span className="font-medium text-[#24212B]">{inv.memberEmail}</span>
-                    <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full uppercase">
-                      {inv.status}
+          {/* Teammates Roster */}
+          {userParticipation.teammates?.length > 0 && (
+            <div className="bg-white/90 rounded-xl p-4 border border-purple-100">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-purple-800 block mb-2">Team Members & Acceptance Progress</span>
+              <div className="space-y-2">
+                {userParticipation.teammates.map((tm, idx) => (
+                  <div key={idx} className="flex items-center justify-between text-xs py-1.5 px-3 rounded-lg bg-purple-50/60">
+                    <div className="flex items-center space-x-2">
+                      <span className="font-semibold text-[#24212B]">{tm.fullName}</span>
+                      <span className="text-[10px] text-[#777180]">({tm.email})</span>
+                      {tm.role === 'leader' && (
+                        <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-purple-200 text-[#6D28D9]">Leader</span>
+                      )}
+                    </div>
+                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                      tm.status === 'accepted'
+                        ? 'bg-emerald-100 text-[#16865B]'
+                        : tm.status === 'declined'
+                        ? 'bg-rose-100 text-rose-700'
+                        : 'bg-amber-100 text-amber-800'
+                    }`}>
+                      {tm.status}
                     </span>
                   </div>
                 ))}
@@ -294,7 +376,7 @@ export function EventDetailsPage() {
           <div className="text-right">
             <span className="text-xs text-[#777180]">Capacity Status:</span>
             <p className="text-sm font-extrabold text-[#24212B]">
-              {event.currentRegistrations || 0} / {event.maxCapacity} <span className="text-xs font-normal text-emerald-600">({event.maxCapacity - (event.currentRegistrations || 0)} available)</span>
+              {event.currentRegistrations || 0} / {event.maxCapacity} <span className="text-xs font-normal text-emerald-600">({Math.max(0, event.maxCapacity - (event.currentRegistrations || 0))} available)</span>
             </p>
           </div>
         </div>
@@ -363,8 +445,8 @@ export function EventDetailsPage() {
           </div>
         )}
 
-        {/* TEAM REGISTRATION FORM (When event is team type and user is student and not yet registered) */}
-        {isTeamEvent && !existingPass && !registeredNewPass && !teamRegistrationResult && isStudent && !isClosed && (
+        {/* TEAM REGISTRATION FORM (When event is team, user is logged in as student, and NOT yet participating) */}
+        {isTeamEvent && !isUserParticipating && !existingPass && !registeredNewPass && isStudent && !isClosed && (
           <form onSubmit={handleTeamRegister} className="pt-6 border-t border-[#EAE6F0] space-y-6">
             <div className="bg-[#FAF9FC] p-6 rounded-2xl border border-purple-100 space-y-4">
               <div className="flex items-center space-x-2 text-xs font-bold text-[#6D28D9] uppercase tracking-wider">
@@ -396,7 +478,7 @@ export function EventDetailsPage() {
                     <span>Invite Team Members by Email ({memberEmails.length} invited)</span>
                   </label>
                   <span className="text-[11px] text-[#777180]">
-                    Total Team Size: <strong className="text-[#24212B]">{1 + memberEmails.length}</strong> (Allowed: {event.minTeamSize}-{event.maxTeamSize})
+                    Total Team Headcount: <strong className="text-[#24212B]">{1 + memberEmails.length}</strong> (Allowed: {event.minTeamSize}-{event.maxTeamSize})
                   </span>
                 </div>
 
@@ -453,59 +535,69 @@ export function EventDetailsPage() {
           </form>
         )}
 
-        {/* Action Button Section (For individual events or pass display) */}
-        {(!isTeamEvent || existingPass || registeredNewPass || teamRegistrationResult || isAdmin || isClosed) && (
-          <div className="pt-6 border-t border-[#EAE6F0] flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="text-xs text-[#777180]">
-              {isStudent && (
-                <span className="flex items-center space-x-1.5 text-emerald-700 font-semibold">
-                  <ShieldCheck className="w-4 h-4 text-[#16865B]" />
-                  <span>Single-Click Verified Student Registration</span>
-                </span>
-              )}
-            </div>
-
-            <div>
-              {existingPass || registeredNewPass ? (
-                <Link
-                  to="/my-passes"
-                  className="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-sm flex items-center space-x-2 transition-colors"
-                >
-                  <QrCode className="w-4 h-4" />
-                  <span>View My SmartPass</span>
-                </Link>
-              ) : teamRegistrationResult ? (
-                <span className="px-5 py-2.5 rounded-xl bg-purple-100 text-[#6D28D9] font-bold text-xs flex items-center space-x-1.5">
-                  <Clock className="w-4 h-4" />
-                  <span>Team Invitations Pending</span>
-                </span>
-              ) : isAdmin ? (
-                <Link
-                  to={`/admin/events/${event.id}/edit`}
-                  className="px-6 py-3 rounded-xl bg-[#6D28D9] text-white font-bold text-sm hover:bg-[#4C1D95]"
-                >
-                  Edit Event (Admin)
-                </Link>
-              ) : isClosed ? (
-                <button
-                  disabled
-                  className="px-6 py-3 rounded-xl bg-slate-200 text-slate-500 font-bold text-sm cursor-not-allowed"
-                >
-                  {isFull ? 'Event Full (Capacity Reached)' : 'Registration Closed'}
-                </button>
-              ) : (
-                <button
-                  onClick={handleIndividualRegister}
-                  disabled={registering}
-                  className="px-8 py-3.5 rounded-xl bg-[#6D28D9] hover:bg-[#4C1D95] text-white font-bold text-sm shadow-md shadow-purple-200 transition-all flex items-center space-x-2 disabled:opacity-50"
-                >
-                  <QrCode className="w-4 h-4" />
-                  <span>{registering ? 'Claiming Pass...' : 'Register & Claim SmartPass'}</span>
-                </button>
-              )}
-            </div>
+        {/* Action Button Section */}
+        <div className="pt-6 border-t border-[#EAE6F0] flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="text-xs text-[#777180]">
+            {isStudent && (
+              <span className="flex items-center space-x-1.5 text-emerald-700 font-semibold">
+                <ShieldCheck className="w-4 h-4 text-[#16865B]" />
+                <span>Verified Campus Student</span>
+              </span>
+            )}
           </div>
-        )}
+
+          <div>
+            {!isAuthenticated ? (
+              <Link
+                to="/login"
+                state={{ from: { pathname: `/events/${id}` } }}
+                className="px-8 py-3.5 rounded-xl bg-[#6D28D9] hover:bg-[#4C1D95] text-white font-bold text-sm shadow-md shadow-purple-200 transition-all flex items-center space-x-2"
+              >
+                <LogIn className="w-4 h-4" />
+                <span>{isTeamEvent ? 'Sign In as Student to Register Team' : 'Sign In to Register'}</span>
+              </Link>
+            ) : existingPass || registeredNewPass ? (
+              <Link
+                to="/my-passes"
+                className="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-sm flex items-center space-x-2 transition-colors"
+              >
+                <QrCode className="w-4 h-4" />
+                <span>View My SmartPass</span>
+              </Link>
+            ) : isTeamPending ? (
+              <Link
+                to="/invitations"
+                className="px-6 py-3 rounded-xl bg-purple-100 hover:bg-purple-200 text-[#6D28D9] font-bold text-sm flex items-center space-x-2 transition-colors"
+              >
+                <Clock className="w-4 h-4" />
+                <span>View Team Invitations Portal</span>
+              </Link>
+            ) : isAdmin ? (
+              <Link
+                to={`/admin/events/${event.id}/edit`}
+                className="px-6 py-3 rounded-xl bg-[#6D28D9] text-white font-bold text-sm hover:bg-[#4C1D95]"
+              >
+                Edit Event (Admin)
+              </Link>
+            ) : isClosed ? (
+              <button
+                disabled
+                className="px-6 py-3 rounded-xl bg-slate-200 text-slate-500 font-bold text-sm cursor-not-allowed"
+              >
+                {isFull ? 'Event Full (Capacity Reached)' : 'Registration Closed'}
+              </button>
+            ) : !isTeamEvent ? (
+              <button
+                onClick={handleIndividualRegister}
+                disabled={registering}
+                className="px-8 py-3.5 rounded-xl bg-[#6D28D9] hover:bg-[#4C1D95] text-white font-bold text-sm shadow-md shadow-purple-200 transition-all flex items-center space-x-2 disabled:opacity-50"
+              >
+                <QrCode className="w-4 h-4" />
+                <span>{registering ? 'Claiming Pass...' : 'Register & Claim SmartPass'}</span>
+              </button>
+            ) : null}
+          </div>
+        </div>
       </div>
     </div>
   );

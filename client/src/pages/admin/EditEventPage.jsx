@@ -20,6 +20,9 @@ export function EditEventPage() {
     endTime: '',
     registrationDeadline: '',
     maxCapacity: 100,
+    registrationType: 'individual',
+    minTeamSize: 2,
+    maxTeamSize: 4,
     status: 'published'
   });
 
@@ -51,6 +54,9 @@ export function EditEventPage() {
             endTime: toInputDate(evt.endTime),
             registrationDeadline: toInputDate(evt.registrationDeadline),
             maxCapacity: evt.maxCapacity,
+            registrationType: evt.registrationType || 'individual',
+            minTeamSize: evt.minTeamSize || 2,
+            maxTeamSize: evt.maxTeamSize || 4,
             status: evt.status
           });
           setGates(evt.gates || []);
@@ -65,26 +71,68 @@ export function EditEventPage() {
   }, [id]);
 
   const handleChange = (e) => {
-    const value = e.target.type === 'number' ? parseInt(e.target.value, 10) : e.target.value;
-    setFormData({ ...formData, [e.target.name]: value });
+    const { name, value, type } = e.target;
+    if (type === 'number') {
+      if (value === '') {
+        setFormData(prev => ({ ...prev, [name]: '' }));
+      } else {
+        const parsed = parseInt(value, 10);
+        setFormData(prev => ({ ...prev, [name]: isNaN(parsed) ? '' : parsed }));
+      }
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleUpdate = async (e) => {
     e.preventDefault();
-    setSaving(true);
     setError('');
     setMessage('');
 
+    const capacityNum = parseInt(formData.maxCapacity, 10);
+    if (isNaN(capacityNum) || capacityNum <= 0) {
+      setError('Maximum capacity must be a positive integer.');
+      return;
+    }
+
+    let minTeam = 1;
+    let maxTeam = 1;
+
+    if (formData.registrationType === 'team') {
+      minTeam = parseInt(formData.minTeamSize, 10);
+      maxTeam = parseInt(formData.maxTeamSize, 10);
+
+      if (isNaN(minTeam) || minTeam < 2) {
+        setError('Minimum team size must be at least 2 members (including leader).');
+        return;
+      }
+
+      if (isNaN(maxTeam) || maxTeam < minTeam) {
+        setError('Maximum team size cannot be less than minimum team size.');
+        return;
+      }
+
+      if (maxTeam > capacityNum) {
+        setError(`Maximum team size (${maxTeam}) cannot exceed event maximum capacity (${capacityNum}).`);
+        return;
+      }
+    }
+
+    setSaving(true);
+
     try {
       const payload = {
-        title: formData.title,
-        description: formData.description,
+        title: formData.title.trim(),
+        description: formData.description.trim(),
         category: formData.category,
-        venue: formData.venue,
+        venue: formData.venue.trim(),
         startTime: new Date(formData.startTime).toISOString(),
         endTime: new Date(formData.endTime).toISOString(),
         registrationDeadline: new Date(formData.registrationDeadline).toISOString(),
-        maxCapacity: formData.maxCapacity,
+        maxCapacity: capacityNum,
+        registrationType: formData.registrationType,
+        minTeamSize: formData.registrationType === 'team' ? minTeam : 1,
+        maxTeamSize: formData.registrationType === 'team' ? maxTeam : 1,
         status: formData.status
       };
 
@@ -246,18 +294,75 @@ export function EditEventPage() {
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-bold text-[#24212B]">Max Capacity</label>
-            <input
-              type="number"
-              name="maxCapacity"
-              required
-              min={1}
-              value={formData.maxCapacity}
-              onChange={handleChange}
-              className="mt-1 w-full sm:w-1/3 px-3.5 py-2 border border-[#EAE6F0] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#6D28D9]"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-[#24212B]">Max Capacity</label>
+              <input
+                type="number"
+                name="maxCapacity"
+                required
+                min={1}
+                value={formData.maxCapacity === '' ? '' : formData.maxCapacity}
+                onChange={handleChange}
+                className="mt-1 w-full px-3.5 py-2 border border-[#EAE6F0] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#6D28D9]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-[#24212B]">Registration Type</label>
+              <select
+                name="registrationType"
+                value={formData.registrationType}
+                onChange={handleChange}
+                className="mt-1 w-full px-3.5 py-2 border border-[#EAE6F0] rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#6D28D9]"
+              >
+                <option value="individual">Individual Participant</option>
+                <option value="team">Team Event</option>
+              </select>
+            </div>
           </div>
+
+          {/* Conditional Team Size Settings */}
+          {formData.registrationType === 'team' && (
+            <div className="p-4 bg-purple-50/60 border border-purple-200 rounded-2xl space-y-3">
+              <div className="flex items-center space-x-2">
+                <span className="text-xs font-bold text-[#6D28D9] uppercase tracking-wider">Team Size Configuration</span>
+              </div>
+              <p className="text-xs text-[#777180]">
+                Configure team capacity boundaries. Headcount includes the Team Leader plus invited member accounts.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-[#24212B]">Min Team Size</label>
+                  <input
+                    type="number"
+                    name="minTeamSize"
+                    required
+                    min={2}
+                    max={formData.maxTeamSize !== '' ? Number(formData.maxTeamSize) : 50}
+                    value={formData.minTeamSize === '' ? '' : formData.minTeamSize}
+                    onChange={handleChange}
+                    className="mt-1 w-full px-3.5 py-2 bg-white border border-[#EAE6F0] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#6D28D9]"
+                  />
+                  <span className="text-[10px] text-[#777180]">Minimum members required (including leader)</span>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-[#24212B]">Max Team Size</label>
+                  <input
+                    type="number"
+                    name="maxTeamSize"
+                    required
+                    min={formData.minTeamSize !== '' ? Number(formData.minTeamSize) : 2}
+                    max={50}
+                    value={formData.maxTeamSize === '' ? '' : formData.maxTeamSize}
+                    onChange={handleChange}
+                    className="mt-1 w-full px-3.5 py-2 bg-white border border-[#EAE6F0] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#6D28D9]"
+                  />
+                  <span className="text-[10px] text-[#777180]">Maximum members allowed (including leader)</span>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="pt-4 flex items-center justify-end">
             <button

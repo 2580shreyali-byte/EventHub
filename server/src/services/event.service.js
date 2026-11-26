@@ -49,7 +49,7 @@ export class EventService {
 
     // Fetch paginated events
     const [rows] = await pool.query(
-      `SELECT 
+      `SELECT
         e.id, e.title, e.description, e.category, e.venue,
         e.start_time AS startTime, e.end_time AS endTime,
         e.registration_deadline AS registrationDeadline,
@@ -63,7 +63,7 @@ export class EventService {
        FROM events e
        JOIN users u ON e.created_by = u.id
        ${whereClause}
-       ORDER BY e.start_time ASC
+       ORDER BY e.start_time ASC, e.id DESC
        LIMIT ? OFFSET ?`,
       [...params, limitNum, offset]
     );
@@ -83,9 +83,9 @@ export class EventService {
    * Retrieves an event by ID.
    * Public/students can only view if status is 'published'.
    */
-  async getEventById(eventId, { isAdmin = false } = {}) {
+  async getEventById(eventId, { isAdmin = false, userId = null } = {}) {
     const [rows] = await pool.query(
-      `SELECT 
+      `SELECT
         e.id, e.title, e.description, e.category, e.venue,
         e.start_time AS startTime, e.end_time AS endTime,
         e.registration_deadline AS registrationDeadline,
@@ -116,12 +116,58 @@ export class EventService {
     // Fetch associated active gates
     const [gates] = await pool.query(
       `SELECT id, gate_name AS gateName, location_description AS locationDescription, is_active AS isActive
-       FROM gates 
+       FROM gates
        WHERE event_id = ? AND is_active = TRUE`,
       [eventId]
     );
 
     event.gates = gates;
+
+    // If userId provided, check team participation
+    event.userParticipation = null;
+    if (userId) {
+      const [parts] = await pool.query(
+        `SELECT tm.id AS memberId, tm.role, tm.status AS memberStatus,
+                r.id AS registrationId, r.team_name AS teamName,
+                r.status AS registrationStatus, r.reserved_headcount AS reservedHeadcount,
+                r.leader_id AS leaderId
+         FROM team_members tm
+         JOIN registrations r ON tm.registration_id = r.id
+         WHERE tm.event_id = ? AND tm.user_id = ? AND r.status != 'cancelled'`,
+        [eventId, userId]
+      );
+
+      if (parts.length > 0) {
+        const part = parts[0];
+        const [teammates] = await pool.query(
+          `SELECT tm2.id AS invitationId, tm2.role, tm2.status, u.full_name AS fullName, u.email
+           FROM team_members tm2
+           JOIN users u ON tm2.user_id = u.id
+           WHERE tm2.registration_id = ?
+           ORDER BY tm2.role DESC, tm2.invited_at ASC`,
+          [part.registrationId]
+        );
+
+        event.userParticipation = {
+          invitationId: part.memberId,
+          registrationId: part.registrationId,
+          teamName: part.teamName,
+          role: part.role,
+          memberStatus: part.memberStatus,
+          registrationStatus: part.registrationStatus,
+          reservedHeadcount: part.reservedHeadcount,
+          isLeader: part.role === 'leader',
+          teammates: teammates.map(t => ({
+            invitationId: t.invitationId,
+            fullName: t.fullName,
+            email: t.email,
+            role: t.role,
+            status: t.status
+          }))
+        };
+      }
+    }
+
     return event;
   }
 
@@ -362,7 +408,7 @@ export class EventService {
 
     const [rows] = await pool.query(
       `SELECT id, gate_name AS gateName, location_description AS locationDescription, is_active AS isActive
-       FROM gates 
+       FROM gates
        WHERE event_id = ?
        ORDER BY id ASC`,
       [eventId]
@@ -380,8 +426,8 @@ export class EventService {
   async updateGate(eventId, gateId, { gateName, locationDescription, isActive }) {
     // 1. Verify gate exists
     const [gateRows] = await pool.query(
-      `SELECT id, event_id, gate_name, location_description, is_active 
-       FROM gates 
+      `SELECT id, event_id, gate_name, location_description, is_active
+       FROM gates
        WHERE id = ?`,
       [gateId]
     );

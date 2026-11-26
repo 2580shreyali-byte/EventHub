@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
+import { api } from '../../api/client.js';
 import {
   Compass,
   QrCode,
@@ -19,8 +20,25 @@ import {
 export function Navbar() {
   const { user, isAuthenticated, isAdmin, isStudent, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [pendingInvitesCount, setPendingInvitesCount] = useState(0);
   const navigate = useNavigate();
   const location = useLocation();
+
+  useEffect(() => {
+    let isMounted = true;
+    if (isAuthenticated && isStudent) {
+      api.get('/invitations')
+        .then(res => {
+          if (isMounted && res.data?.success) {
+            setPendingInvitesCount((res.data.data || []).length);
+          }
+        })
+        .catch(() => { });
+    } else {
+      setPendingInvitesCount(0);
+    }
+    return () => { isMounted = false; };
+  }, [isAuthenticated, isStudent, location.pathname]);
 
   const handleLogout = async () => {
     await logout();
@@ -48,11 +66,10 @@ export function Navbar() {
           <nav className="hidden md:flex items-center space-x-1 lg:space-x-2">
             <Link
               to="/events"
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                isActive('/events')
-                  ? 'bg-[#F1EBFF] text-[#6D28D9]'
-                  : 'text-[#24212B] hover:text-[#6D28D9] hover:bg-slate-50'
-              }`}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${isActive('/events')
+                ? 'bg-[#F1EBFF] text-[#6D28D9]'
+                : 'text-[#24212B] hover:text-[#6D28D9] hover:bg-slate-50'
+                }`}
             >
               Explore Events
             </Link>
@@ -61,35 +78,37 @@ export function Navbar() {
               <>
                 <Link
                   to="/dashboard"
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                    isActive('/dashboard')
-                      ? 'bg-[#F1EBFF] text-[#6D28D9]'
-                      : 'text-[#24212B] hover:text-[#6D28D9] hover:bg-slate-50'
-                  }`}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${isActive('/dashboard')
+                    ? 'bg-[#F1EBFF] text-[#6D28D9]'
+                    : 'text-[#24212B] hover:text-[#6D28D9] hover:bg-slate-50'
+                    }`}
                 >
                   Dashboard
                 </Link>
                 <Link
                   to="/my-passes"
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center space-x-1.5 transition-colors ${
-                    isActive('/my-passes')
-                      ? 'bg-[#F1EBFF] text-[#6D28D9]'
-                      : 'text-[#24212B] hover:text-[#6D28D9] hover:bg-slate-50'
-                  }`}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center space-x-1.5 transition-colors ${isActive('/my-passes')
+                    ? 'bg-[#F1EBFF] text-[#6D28D9]'
+                    : 'text-[#24212B] hover:text-[#6D28D9] hover:bg-slate-50'
+                    }`}
                 >
                   <QrCode className="w-4 h-4 text-[#6D28D9]" />
                   <span>My Passes</span>
                 </Link>
                 <Link
                   to="/invitations"
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center space-x-1.5 transition-colors ${
-                    isActive('/invitations')
-                      ? 'bg-[#F1EBFF] text-[#6D28D9]'
-                      : 'text-[#24212B] hover:text-[#6D28D9] hover:bg-slate-50'
-                  }`}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center space-x-1.5 transition-colors ${isActive('/invitations')
+                    ? 'bg-[#F1EBFF] text-[#6D28D9]'
+                    : 'text-[#24212B] hover:text-[#6D28D9] hover:bg-slate-50'
+                    }`}
                 >
                   <Mail className="w-4 h-4 text-[#6D28D9]" />
                   <span>Invitations</span>
+                  {pendingInvitesCount > 0 && (
+                    <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-extrabold bg-[#6D28D9] text-white">
+                      {pendingInvitesCount}
+                    </span>
+                  )}
                 </Link>
               </>
             )}
@@ -98,43 +117,39 @@ export function Navbar() {
               <>
                 <Link
                   to="/admin"
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                    isActive('/admin')
-                      ? 'bg-[#F1EBFF] text-[#6D28D9]'
-                      : 'text-[#24212B] hover:text-[#6D28D9] hover:bg-slate-50'
-                  }`}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${isActive('/admin')
+                    ? 'bg-[#F1EBFF] text-[#6D28D9]'
+                    : 'text-[#24212B] hover:text-[#6D28D9] hover:bg-slate-50'
+                    }`}
                 >
                   Admin Portal
                 </Link>
                 <Link
                   to="/admin/events/new"
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center space-x-1 transition-colors ${
-                    isActive('/admin/events/new')
-                      ? 'bg-[#F1EBFF] text-[#6D28D9]'
-                      : 'text-[#24212B] hover:text-[#6D28D9] hover:bg-slate-50'
-                  }`}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center space-x-1 transition-colors ${isActive('/admin/events/new')
+                    ? 'bg-[#F1EBFF] text-[#6D28D9]'
+                    : 'text-[#24212B] hover:text-[#6D28D9] hover:bg-slate-50'
+                    }`}
                 >
                   <PlusCircle className="w-4 h-4 text-[#6D28D9]" />
                   <span>New Event</span>
                 </Link>
                 <Link
                   to="/admin/scanner"
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center space-x-1 transition-colors ${
-                    isActive('/admin/scanner')
-                      ? 'bg-[#F1EBFF] text-[#6D28D9]'
-                      : 'text-[#24212B] hover:text-[#6D28D9] hover:bg-slate-50'
-                  }`}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center space-x-1 transition-colors ${isActive('/admin/scanner')
+                    ? 'bg-[#F1EBFF] text-[#6D28D9]'
+                    : 'text-[#24212B] hover:text-[#6D28D9] hover:bg-slate-50'
+                    }`}
                 >
                   <ScanLine className="w-4 h-4 text-[#6D28D9]" />
                   <span>Gate Scanner</span>
                 </Link>
                 <Link
                   to="/admin/queueless"
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center space-x-1 transition-colors ${
-                    isActive('/admin/queueless')
-                      ? 'bg-[#F1EBFF] text-[#6D28D9]'
-                      : 'text-[#24212B] hover:text-[#6D28D9] hover:bg-slate-50'
-                  }`}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center space-x-1 transition-colors ${isActive('/admin/queueless')
+                    ? 'bg-[#F1EBFF] text-[#6D28D9]'
+                    : 'text-[#24212B] hover:text-[#6D28D9] hover:bg-slate-50'
+                    }`}
                 >
                   <Activity className="w-4 h-4 text-emerald-600" />
                   <span>QueueLess</span>
@@ -227,9 +242,14 @@ export function Navbar() {
               <Link
                 to="/invitations"
                 onClick={() => setMobileMenuOpen(false)}
-                className="block px-3 py-2 rounded-lg text-base font-medium text-[#24212B] hover:bg-[#F1EBFF]"
+                className="flex items-center justify-between px-3 py-2 rounded-lg text-base font-medium text-[#24212B] hover:bg-[#F1EBFF]"
               >
-                Team Invitations
+                <span>Team Invitations</span>
+                {pendingInvitesCount > 0 && (
+                  <span className="px-2 py-0.5 rounded-full text-xs font-extrabold bg-[#6D28D9] text-white">
+                    {pendingInvitesCount}
+                  </span>
+                )}
               </Link>
               <Link
                 to="/profile"

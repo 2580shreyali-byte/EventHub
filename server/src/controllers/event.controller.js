@@ -18,7 +18,8 @@ export class EventController {
   async getEventById(req, res, next) {
     try {
       const isAdmin = req.user?.role === 'admin';
-      const event = await eventService.getEventById(req.params.id, { isAdmin });
+      const userId = req.user?.id || null;
+      const event = await eventService.getEventById(req.params.id, { isAdmin, userId });
 
       if (!event) {
         return res.status(404).json({
