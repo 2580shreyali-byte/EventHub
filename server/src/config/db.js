@@ -25,7 +25,10 @@ export async function checkDatabaseConnection() {
     await connection.ping();
     connection.release();
     return { ok: true };
-  } catch (err) {
-    return { ok: false, error: err.message };
-  }
+  } 
+  catch(err) {
+  console.error('MYSQL ERROR:', err.code, err.message);
+  return { ok: false, error: err.message || err.code || 'Unknown database error' };
 }
+}
+
