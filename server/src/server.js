@@ -3,8 +3,9 @@ import { env } from './config/env.js';
 import { checkDatabaseConnection } from './config/db.js';
 
 const PORT = parseInt(env.PORT, 10) || 5000;
+const HOST = '0.0.0.0';
 
-const server = app.listen(PORT, async () => {
+const server = app.listen(PORT, HOST, async () => {
   console.log(`[EventHub Server] Running on http://localhost:${PORT}`);
   console.log(`[EventHub Server] Environment: ${env.NODE_ENV}`);
   console.log(`[EventHub Server] Health Check: http://localhost:${PORT}/api/v1/health`);

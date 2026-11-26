@@ -8,6 +8,9 @@ import { errorHandler } from './middleware/error.middleware.js';
 
 const app = express();
 
+// Trust reverse proxy (Railway / Vercel edge) for secure cookies and accurate client IP
+app.set('trust proxy', 1);
+
 // Security HTTP Headers
 app.use(helmet());
 
